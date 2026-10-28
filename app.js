@@ -1,8 +1,25 @@
-import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval } from './backend.js';
+import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval } from './backend.js?v=names-countdown-1';
 const $=id=>document.getElementById(id),canvas=$('drawing'),ctx=canvas.getContext('2d'),onion=$('onion').getContext('2d');
 const emptyState=()=>({count:0,frames:[],reservations:[],booking:null,revision:0});
 let state=emptyState(),selected=0,tool='pen',drawing=false,editing=false,busy=false,playback=null,history=[],future=[],images=new Map(),renderToken=0,draft=null;
 let liveDrafts=new Map(),overlayToken=0,draftDirty=false,draftSending=false,refreshing=false,pendingRefresh=false,projectEpoch=0,ready=false;
+let artistName='', nameChosen=false;
+try{const saved=localStorage.getItem('sixfps-artist-name');if(saved!==null){artistName=saved.slice(0,40);nameChosen=true;}}catch{}
+let nameResolve=null;
+function askName(){
+ if(nameResolve)return Promise.resolve(false);
+ $('artist-name').value=artistName;
+ $('name-dialog').showModal();$('artist-name').focus();
+ return new Promise(resolve=>{nameResolve=resolve;});
+}
+$('name-form').onsubmit=e=>{
+ e.preventDefault();artistName=$('artist-name').value.trim().slice(0,40);nameChosen=true;
+ try{localStorage.setItem('sixfps-artist-name',artistName);}catch{}
+ const resolve=nameResolve;nameResolve=null;$('name-dialog').close();update();resolve?.(true);
+};
+$('name-cancel').onclick=()=>$('name-dialog').close();
+$('name-dialog').addEventListener('close',()=>{if(nameResolve){const resolve=nameResolve;nameResolve=null;resolve(false);}});
+$('edit-name').onclick=()=>askName();
 const blank=()=>ctx.clearRect(0,0,540,960);
 const submitted=n=>state.frames.some(f=>f.slot===n);
 const highest=()=>Math.max(0,...state.frames.map(f=>f.slot));
@@ -21,6 +38,9 @@ function loadImage(src){return new Promise((resolve,reject)=>{const i=new Image(
 function stop(){clearInterval(playback);playback=null;$('play').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14l11-7z"/></svg>';$('play').setAttribute('aria-label','Play movie');}
 function update(){
  countdown();
+ const credit=state.frames.find(f=>f.slot===selected)?.artistName;
+ $('frame-credit').hidden=editing||!credit;$('frame-credit').textContent=credit?`by ${credit}`:'';
+ $('edit-name').hidden=!editing;$('edit-name').textContent=artistName||'Your name';
  const mine=activeTurn(),available=state.frames.length+state.reservations.length<90;
  $('book').disabled=busy||!ready||(!mine&&(!available||state.complete));$('book').textContent=mine?'↗':'+';$('book').setAttribute('aria-label',mine?'Return to your drawing':'Book next available frame');
  $('publish').hidden=!mine;$('release').hidden=!mine;$('publish').disabled=busy||!editing||!history.length;$('release').disabled=busy;
@@ -73,7 +93,7 @@ async function refresh(){
 }
 async function book(){
  if(busy)return;if(activeTurn())return resume();busy=true;stop();update();
- try{state=await api('book',{});await resume();await strip();toast(`Frame ${ownSlot()} booked`);}catch(e){toast(e.message);}finally{busy=false;update();}
+ try{if(!nameChosen&&!(await askName()))return;state=await api('book',{});await resume();await strip();toast(`Frame ${ownSlot()} booked`);}catch(e){toast(e.message);}finally{busy=false;update();}
 }
 $('book').onclick=book;
 $('release').onclick=async()=>{
@@ -82,7 +102,7 @@ $('release').onclick=async()=>{
 };
 $('publish').onclick=async()=>{
  if(busy||!editing||!activeTurn())return;busy=true;update();const slot=ownSlot(),output=document.createElement('canvas');output.width=540;output.height=960;const c=output.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,540,960);c.drawImage(canvas,0,0);
- try{state=await api('frames',{image:output.toDataURL('image/png')});editing=false;draft=null;draftDirty=false;history=[];future=[];images.clear();await show(slot);await strip();toast(state.complete?'Movie complete · 90 frames · 15 seconds':'Frame submitted');}catch(e){toast(e.message);}finally{busy=false;update();}
+ try{state=await api('frames',{image:output.toDataURL('image/png'),artistName});editing=false;draft=null;draftDirty=false;history=[];future=[];images.clear();await show(slot);await strip();toast(state.complete?'Movie complete · 90 frames · 15 seconds':'Frame submitted');}catch(e){toast(e.message);}finally{busy=false;update();}
 };
 function point(e) { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * 540 / r.width, (e.clientY - r.top) * 960 / r.height]; }
 function saveUndo() { history.push(canvas.toDataURL()); if (history.length > 30) history.shift(); future = []; }
