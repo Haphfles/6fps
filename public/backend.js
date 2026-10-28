@@ -1,82 +1,69 @@
 import config from './config.js';
-
-let clientPromise;
-async function client() {
-  if (!clientPromise) clientPromise = import('./vendor/supabase.js').then(({ createClient }) => createClient(config.url, config.publishableKey));
-  return clientPromise;
+let clientPromise, project = null, current = null, channel = null, generation = 0;
+let onMovie = () => {}, onDraft = () => {}, onConnection = () => {}, connected = false, pending = null;
+export async function client() {
+ if (!config.url) throw new Error('Projects use Supabase. Start the local preview with SIXFPS_BACKEND=supabase npm start.');
+ if (!clientPromise) clientPromise = import('./vendor/supabase.js').then(({createClient}) => createClient(config.url,config.publishableKey));
+ return clientPromise;
 }
 function check(error) {
-  if (!error) return;
-  if (error.code === 'PGRST202' || error.code === '42P01') throw new Error('Database setup needed. Run supabase/setup.sql in Supabase.');
-  if (/anonymous.*disabled/i.test(error.message)) throw new Error('Enable anonymous sign-ins in Supabase Authentication settings.');
-  throw new Error(error.message || 'Could not connect. Please try again.');
+ if (!error) return;
+ if(error.code==='PGRST202'||error.code==='42703') throw new Error('Project setup needed. Run supabase/projects.sql, then refresh.');
+ if(/anonymous.*disabled/i.test(error.message)) throw new Error('Enable anonymous sign-ins in Supabase.');
+ throw new Error(error.message || 'Connection failed.');
 }
-let signInPromise;
+async function rpc(name,args={}) { const {data,error}=await (await client()).rpc(name,args);check(error);return data; }
 async function identity() {
-  if (!signInPromise) signInPromise = (async () => {
-    const sb = await client();
-    const { data, error } = await sb.auth.getSession(); check(error);
-    if (!data.session) { const result = await sb.auth.signInAnonymously(); check(result.error); }
-  })().finally(() => { signInPromise = null; });
-  return signInPromise;
+ const sb=await client(); const {data,error}=await sb.auth.getSession();check(error);
+ if(!data.session){const result=await sb.auth.signInAnonymously();check(result.error);}
 }
-const paths = new Map();
-let booking = null, pendingPublish = null, movieRevision = null, orderedFrames = false;
-async function rpc(name, args = {}) {
-  const sb = await client(); const { data, error } = await sb.rpc(name, args); check(error); return data;
+export function listen(movie,draft,status){onMovie=movie;onDraft=draft;onConnection=status;}
+export async function chooseProject(id) {
+ const sb=await client(); const version=++generation;
+ if(channel) await sb.removeChannel(channel);
+ project=Number(id);current=null;pending=null;connected=false;onConnection(false);
+ channel=sb.channel(`sixfps-project-${project}-${version}`)
+  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'sixfps_movie',filter:`id=eq.${project}`},()=>{if(version===generation)onMovie();})
+  .on('postgres_changes',{event:'*',schema:'public',table:'sixfps_drafts',filter:`project_id=eq.${project}`},payload=>{
+   if(version!==generation)return;
+   const row=payload.new;
+   if(row?.slot && row.image && new Date(row.expires_at).getTime()>Date.now())onDraft(row.slot,row.image);
+   else onMovie();
+  }).subscribe(status=>{if(version!==generation)return;connected=status==='SUBSCRIBED';onConnection(connected);if(connected){onMovie();readDrafts().catch(()=>{});}});
+ await readDrafts();
 }
-function remember(state) {
-  orderedFrames = state.revision !== undefined;
-  if (movieRevision !== state.revision) { paths.clear(); movieRevision = state.revision; }
-  booking = state.booking?.mine ? state.booking : null; return state;
+export async function readDrafts() {
+ if(!project)return;const id=project;const {data,error}=await (await client()).from('sixfps_drafts').select('slot,image,expires_at').eq('project_id',id);check(error);
+ if(id===project)for(const row of data)onDraft(row.slot,row.image);
 }
-async function frame(n) {
-  const sb = await client();
-  if (!paths.has(n)) {
-    const { data, error } = await sb.from('sixfps_frames').select('id,object_path').eq(orderedFrames ? 'position' : 'id', n).single();
-    check(error); paths.set(n, data.object_path);
-  }
-  return { image: sb.storage.from('sixfps-frames').getPublicUrl(paths.get(n)).data.publicUrl };
+export async function sendDraft(image) {
+ const own=current?.booking;if(!own)return;
+ await rpc('sixfps_project_draft',{p_project:project,p_token:own.token,p_image:image});
 }
-async function publish(image) {
-  const sb = await client();
-  // Retry completion first if an earlier upload succeeded but the final response was lost.
-  if (pendingPublish?.uploaded) {
-    const state = await rpc('sixfps_publish', { booking_token: pendingPublish.token });
-    pendingPublish = null; return remember(state);
-  }
-  if (!booking) throw new Error('Book a frame before publishing.');
-  if (!/^data:image\/png;base64,/.test(image)) throw new Error('Please publish a PNG drawing.');
-  const bytes = Uint8Array.from(atob(image.split(',')[1]), char => char.charCodeAt(0));
-  const blob = new Blob([bytes], { type: 'image/png' });
-  if (blob.size > 2097152) throw new Error('This drawing exceeds the 2 MB frame limit.');
-  pendingPublish = { token: booking.token, path: booking.path, uploaded: false };
-  const { error } = await sb.storage.from('sixfps-frames').upload(pendingPublish.path, blob, { contentType: 'image/png', upsert: false, cacheControl: '31536000' });
-  // Existing objects may be a successful upload whose network response was lost.
-  if (error && !/already exists|duplicate/i.test(error.message)) check(error);
-  pendingPublish.uploaded = true;
-  const state = await rpc('sixfps_publish', { booking_token: pendingPublish.token });
-  pendingPublish = null; return remember(state);
+export function isLive(){return connected;}
+export async function api(route,body) {
+ const sb=await client();
+ if(route==='projects'){const {data,error}=await sb.from('sixfps_movie').select('id,name,frame_count').order('created_at');check(error);return data;}
+ if(!project)throw new Error('Choose a movie.');
+ if(route==='state'){current=await rpc('sixfps_project_state',{p_project:project});if(!current)throw new Error('Movie not found.');return current;}
+ if(route.startsWith('frames/')){const f=current?.frames.find(f=>f.slot===Number(route.split('/')[1]));return {image:f?sb.storage.from('sixfps-frames').getPublicUrl(f.path).data.publicUrl:null};}
+ await identity();
+ if(route==='book'){current=await rpc('sixfps_project_book',{p_project:project});if(pending?.token!==current.booking?.token)pending=null;return current;}
+ if(route==='release'){
+  if(!current?.booking)throw new Error('Your booking has ended.');
+  current=await rpc('sixfps_project_release',{p_project:project,p_token:current.booking.token});pending=null;return current;
+ }
+ if(route==='frames'){
+  if(pending?.uploaded){current=await rpc('sixfps_project_publish',{p_project:project,p_token:pending.token});pending=null;return current;}
+  const own=current?.booking;if(!own)throw new Error('Book a frame first.');
+  if(!/^data:image\/png;base64,/.test(body.image))throw new Error('Please submit a PNG drawing.');
+  const blob=new Blob([Uint8Array.from(atob(body.image.split(',')[1]),c=>c.charCodeAt(0))],{type:'image/png'});
+  if(blob.size>2097152)throw new Error('Drawing exceeds 2 MB.');
+  pending={token:own.token,uploaded:false};
+  const {error}=await sb.storage.from('sixfps-frames').upload(own.path,blob,{contentType:'image/png',upsert:false,cacheControl:'31536000'});
+  if(error&&!/already exists|duplicate/i.test(error.message))check(error);
+  pending.uploaded=true;current=await rpc('sixfps_project_publish',{p_project:project,p_token:own.token});pending=null;return current;
+ }
+ throw new Error('Unknown request.');
 }
-export async function api(route, body) {
-  if (config.backend === 'local') {
-    const res = await fetch(`/api/${route}`, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json(); if (!res.ok) throw new Error(data.error); return data;
-  }
-  if (route === 'state') return remember(await rpc('sixfps_state'));
-  if (route.startsWith('frames/')) return frame(Number(route.split('/')[1]));
-  await identity();
-  if (route === 'book') {
-    const state = await rpc('sixfps_book');
-    if (pendingPublish && pendingPublish.token !== state.booking?.token) pendingPublish = null;
-    return remember(state);
-  }
-  if (route === 'release') {
-    if (!booking) throw new Error('Your booking has ended.');
-    const state = await rpc('sixfps_release', { booking_token: booking.token });
-    pendingPublish = null; return remember(state);
-  }
-  if (route === 'frames') return publish(body.image);
-  throw new Error('Unknown request.');
-}
-export const pollInterval = config.backend === 'local' ? 3000 : 10000;
+export const pollInterval=10000;

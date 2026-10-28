@@ -1,5 +1,5 @@
 import config from './config.js';
-let sb;
+let sb, projectId = 1;
 export async function client() {
   if (!config.url) throw new Error('Open the cloud preview to use the admin editor: SIXFPS_BACKEND=supabase npm start');
   if (!sb) {
@@ -13,7 +13,7 @@ export async function client() {
 }
 function checked(result) {
   if (result.error) {
-    if (result.error.code === 'PGRST202') throw new Error('Admin setup needed. Run supabase/admin.sql in Supabase.');
+    if (result.error.code === 'PGRST202') throw new Error('Admin setup needed. Run supabase/projects.sql in Supabase.');
     throw new Error(result.error.message);
   }
   return result.data;
@@ -27,10 +27,14 @@ export async function login(email, password) {
   }
 }
 export async function logout() { checked(await (await client()).auth.signOut({ scope: 'local' })); }
-export async function loadMovie() { return checked(await (await client()).rpc('sixfps_admin_state')); }
+export async function listProjects() { return checked(await (await client()).from('sixfps_movie').select('id,name,frame_count').order('created_at')); }
+export function selectProject(id) { projectId = Number(id); }
+export async function createProject(name) { const id = checked(await (await client()).rpc('sixfps_project_create', { p_name: name })); projectId=id; return id; }
+export async function loadMovie() { return checked(await (await client()).rpc('sixfps_project_admin_state', { p_project: projectId })); }
 export function imageUrl(path) { return sb.storage.from('sixfps-frames').getPublicUrl(path).data.publicUrl; }
 export async function edit(action, id, position, revision) {
-  return checked(await (await client()).rpc('sixfps_admin_edit', {
+  return checked(await (await client()).rpc('sixfps_project_edit', {
+    p_project: projectId,
     action, frame_id: id, target_position: position, expected_revision: revision,
   }));
 }

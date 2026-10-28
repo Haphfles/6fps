@@ -63,7 +63,7 @@ const server = http.createServer(async (req, res) => {
       });
       return send(result.status, result.value);
     }
-    if (req.method === 'GET' && url.pathname === '/config.js' && process.env.SIXFPS_BACKEND !== 'supabase') {
+    if (req.method === 'GET' && url.pathname === '/config.js' && process.env.SIXFPS_BACKEND === 'legacy') {
       res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
       return res.end("export default { backend: 'local' };");
     }

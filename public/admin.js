@@ -1,4 +1,4 @@
-import { session, login, logout, loadMovie, imageUrl, edit, deleteFrame } from './admin-api.js';
+import { session, login, logout, loadMovie, imageUrl, edit, deleteFrame, listProjects, selectProject, createProject } from './admin-api.js';
 const $ = id => document.getElementById(id);
 const playSVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14l11-7z"/></svg>';
 const pauseSVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z"/></svg>';
@@ -18,16 +18,16 @@ function renderSelection() {
   $('move-form').hidden = !f || f.archived; $('archive').hidden = !f || f.archived;
   $('restore').hidden = !f?.archived; $('delete').hidden = !f?.archived;
   $('restore').disabled = busy || !!f?.purging;
-  $('move-position').max = data?.movie.count || 1; $('move-position').value = f?.position || 1;
-  $('admin-scrub').max = Math.max(1, data?.movie.count || 0); $('admin-scrub').value = f?.position || 1;
+  $('move-position').max = 90; $('move-position').value = f?.position || 1;
+  $('admin-scrub').max = Math.max(1, active().length); $('admin-scrub').value = Math.max(1, active().findIndex(x => x.id === f?.id) + 1);
   $('admin-scrub').disabled = busy || !data?.movie.count;
   $('admin-play').disabled = busy || !data?.movie.count;
   $('frame-grid').querySelectorAll('button').forEach(b => b.classList.toggle('selected', Number(b.dataset.id) === selected));
 }
 function render() {
-  $('stats').textContent = `${data.movie.count} frames / ${(data.movie.count / 6).toFixed(1)}s`;
-  $('booking-state').textContent = data.movie.booking ? 'Frame booked' : 'No active booking';
-  $('release-booking').hidden = !data.movie.booking;
+  $('stats').textContent = `${data.movie.count}/90 frames · ${(data.movie.count / 6).toFixed(1)}/15s${data.movie.complete ? ' · COMPLETE' : ''}`;
+  $('booking-state').textContent = data.movie.reservations.length ? `${data.movie.reservations.length} active bookings` : 'No active bookings';
+  $('release-booking').hidden = !data.movie.reservations.length;
   $('active-count').textContent = active().length; $('archive-count').textContent = data.frames.filter(f => f.archived).length;
   $('movie-tab').setAttribute('aria-selected', String(!archived)); $('archive-tab').setAttribute('aria-selected', String(archived));
   const list = frames(); if (!list.some(f => f.id === selected)) selected = list[0]?.id ?? null;
@@ -42,10 +42,10 @@ function render() {
   }
   renderSelection();
 }
-function setBusy(value) { busy = value; document.querySelectorAll('button').forEach(b => b.disabled = value); if (data) renderSelection(); }
+function setBusy(value) { busy = value; document.querySelectorAll('button').forEach(b => b.disabled = value); $('admin-project').disabled=value; $('project-name').disabled=value; if (data) renderSelection(); }
 async function refresh() { data = await loadMovie(); render(); }
 async function openEditor() {
-  await refresh(); $('login-panel').hidden = true; $('editor').hidden = false; $('logout').hidden = false; $('refresh').hidden = false; message('');
+  await fillProjects(); await refresh(); $('login-panel').hidden = true; $('editor').hidden = false; $('logout').hidden = false; $('refresh').hidden = false; message('');
 }
 $('login-form').onsubmit = async e => {
   e.preventDefault(); setBusy(true); message('Signing in…');
@@ -69,7 +69,7 @@ async function mutate(action, position = null) {
 $('move-form').onsubmit = e => { e.preventDefault(); mutate('move', Number($('move-position').value)); };
 $('archive').onclick = () => mutate('archive');
 $('restore').onclick = () => mutate('restore');
-$('release-booking').onclick = () => { if (confirm('Release the active booking? The person drawing will no longer be able to publish that turn.')) mutate('release'); };
+$('release-booking').onclick = () => { if (confirm('Release all active bookings in this movie? Contributors will need to reserve again.')) mutate('release'); };
 $('delete').onclick = async () => {
   const f = selectedFrame(); if (!f || busy || !confirm(`Permanently delete archived frame ${f.id} and its image? This cannot be undone.`)) return;
   stop(); setBusy(true); message('Deleting…');
@@ -88,4 +88,12 @@ $('admin-play').onclick = async () => {
     $('admin-play').innerHTML = pauseSVG; $('admin-play').setAttribute('aria-label', 'Pause movie');
   } catch(e) { message(e.message); } finally { setBusy(false); }
 };
+async function fillProjects(preferred) {
+  const list=await listProjects(), current=preferred || Number($('admin-project').value) || list[0]?.id;
+  $('admin-project').replaceChildren(...list.map(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name;return o;}));
+  $('admin-project').value=current;selectProject(current);
+}
+$('admin-project').onchange=async()=>{stop();setBusy(true);selected=null;archived=false;selectProject($('admin-project').value);try{await refresh();message('');}catch(e){message(e.message);}finally{setBusy(false);}};
+$('create-project-form').onsubmit=async e=>{e.preventDefault();stop();setBusy(true);try{const id=await createProject($('project-name').value.trim());$('project-name').value='';await fillProjects(id);selected=null;archived=false;await refresh();message('Movie created · 90 frames / 15 seconds.');}catch(e){message(e.message);}finally{setBusy(false);}};
+$('clear-movie').onclick=()=>{if(confirm('Clear this movie? All its submitted frames move to Archive and all current bookings are released. You can restore archived drawings later.'))mutate('clear');};
 (async () => { setBusy(true); try { if (await session()) await openEditor(); } catch(e) { message(e.message); } finally { setBusy(false); } })();
