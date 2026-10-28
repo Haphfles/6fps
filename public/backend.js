@@ -21,15 +21,19 @@ async function identity() {
   return signInPromise;
 }
 const paths = new Map();
-let booking = null, pendingPublish = null;
+let booking = null, pendingPublish = null, movieRevision = null, orderedFrames = false;
 async function rpc(name, args = {}) {
   const sb = await client(); const { data, error } = await sb.rpc(name, args); check(error); return data;
 }
-function remember(state) { booking = state.booking?.mine ? state.booking : null; return state; }
+function remember(state) {
+  orderedFrames = state.revision !== undefined;
+  if (movieRevision !== state.revision) { paths.clear(); movieRevision = state.revision; }
+  booking = state.booking?.mine ? state.booking : null; return state;
+}
 async function frame(n) {
   const sb = await client();
   if (!paths.has(n)) {
-    const { data, error } = await sb.from('sixfps_frames').select('id,object_path').eq('id', n).single();
+    const { data, error } = await sb.from('sixfps_frames').select('id,object_path').eq(orderedFrames ? 'position' : 'id', n).single();
     check(error); paths.set(n, data.object_path);
   }
   return { image: sb.storage.from('sixfps-frames').getPublicUrl(paths.get(n)).data.publicUrl };

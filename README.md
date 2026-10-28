@@ -72,3 +72,7 @@ For a small trusted pilot, the supplied setup is ready after the SQL and Auth st
 - `test/`: local-server tests and embedded Postgres tests of the actual Supabase SQL.
 
 `npm test` checks local booking behavior and SQL permissions/ownership/expiry/retry behavior. SQL tests use local fixtures for Supabase Auth/Storage and are not an end-to-end test of your hosted project. After setup, test two separate browsers: only one should book, then publish, scrub, and play the cloud movie.
+
+## Private movie editor
+
+See [ADMIN-SETUP.md](ADMIN-SETUP.md) to enable your private editor. Run `supabase/admin.sql` after `supabase/setup.sql`, create your own confirmed email/password user, then grant only that user admin access. The public site keeps its submission-only permissions. Play/pause icons now use SVG for consistent iPhone rendering.

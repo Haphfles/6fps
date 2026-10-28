@@ -2,3 +2,8 @@
 
 /* 6FPS: compact, heavy italic wordmark; no external font requests. */
 .wordmark{font-family:"Arial Black","Helvetica Neue",Arial,sans-serif;font-size:31px;font-weight:900;font-style:italic;letter-spacing:-2.4px;line-height:1;transform:skewX(-5deg);padding-right:5px}.transport .playback-rate{justify-self:end;font:10px monospace;letter-spacing:1px}@media(max-width:600px){.wordmark{font-size:28px;letter-spacing:-2px}}
+
+/* Prevent iOS native/emoji button rendering. */
+button{-webkit-appearance:none;appearance:none;background-image:none;box-shadow:none}
+.transport #play{display:inline-flex;align-items:center;justify-content:center;padding:0;background:#fff;color:#000;line-height:1}
+.transport #play svg{width:20px;height:20px;fill:currentColor;stroke:none}

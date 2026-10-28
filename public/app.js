@@ -5,7 +5,7 @@ let state = { count: 0, booking: null }, selected = 0, tool = 'pen', drawing = f
 const blank = () => ctx.clearRect(0, 0, 540, 960);
 function toast(message) { $('toast').textContent = message; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').textContent = '', 5000); }
 async function imageAt(n) { if (!images.has(n)) images.set(n, api(`frames/${n}`).then(data => new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('Could not load frame. Please try again.')); image.crossOrigin = 'anonymous'; image.src = data.image; })).catch(e => { images.delete(n); throw e; })); return images.get(n); }
-function stop() { clearInterval(playback); playback = null; $('play').textContent = '▶'; $('play').classList.remove('playing'); $('play').setAttribute('aria-label', 'Play movie'); }
+function stop() { clearInterval(playback); playback = null; $('play').innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14l11-7z"/></svg>'; $('play').classList.remove('playing'); $('play').setAttribute('aria-label', 'Play movie'); }
 function update() {
   const mine = state.booking?.mine;
   $('book').hidden = !!mine; $('publish').hidden = !mine; $('release').hidden = !mine;
@@ -54,7 +54,13 @@ async function strip() {
 async function refresh() {
   const previous = state; state = await api('state');
   if (previous.booking?.mine && !state.booking?.mine) { if (editing) draft = canvas.toDataURL(); editing = false; toast('Your turn ended. Your drawing is kept in this tab.'); await show(state.count); }
-  if (state.count !== previous.count || !!state.booking?.mine !== !!previous.booking?.mine) await strip();
+  const changed = state.count !== previous.count || state.revision !== previous.revision;
+  if (changed) {
+    stop(); images.clear();
+    if (editing) { onion.clearRect(0, 0, 540, 960); if (state.count) fit(onion, await imageAt(state.count)); }
+    else await show(Math.min(selected || state.count, state.count));
+  }
+  if (changed || !!state.booking?.mine !== !!previous.booking?.mine) await strip();
   update();
 }
 async function book() {
@@ -129,7 +135,7 @@ $('opacity').oninput = opacity;
 $('scrubber').oninput = () => { stop(); show(Number($('scrubber').value)).catch(e => toast(e.message)); };
 $('play').onclick = async () => {
   if (playback) return stop();
-  try { busy = true; update(); await Promise.all(Array.from({ length: state.count }, (_, i) => imageAt(i + 1))); await show(1); busy = false; update(); $('play').textContent = 'Ⅱ'; $('play').classList.add('playing'); $('play').setAttribute('aria-label', 'Pause movie'); playback = setInterval(() => show(selected % state.count + 1), 1000 / 6); } catch(e) { busy = false; update(); toast(e.message); }
+  try { busy = true; update(); await Promise.all(Array.from({ length: state.count }, (_, i) => imageAt(i + 1))); await show(1); busy = false; update(); $('play').innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z"/></svg>'; $('play').classList.add('playing'); $('play').setAttribute('aria-label', 'Pause movie'); playback = setInterval(() => show(selected % state.count + 1), 1000 / 6); } catch(e) { busy = false; update(); toast(e.message); }
 };
 let scrubDrag = null, suppressClick = false;
 const filmstrip = $('filmstrip');
@@ -153,5 +159,5 @@ filmstrip.addEventListener('pointerup', endScrub); filmstrip.addEventListener('p
 filmstrip.addEventListener('click', e => { if (suppressClick) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
 window.addEventListener('beforeunload', e => { if (draft && state.booking?.mine) { e.preventDefault(); e.returnValue = ''; } });
 (async () => { try { state = await api('state'); await strip(); if (state.booking?.mine) await resume(); else await show(state.count); } catch(e) { toast(e.message); } })();
-setInterval(() => { if (!busy && !drawing && !playback && document.visibilityState === 'visible') refresh().catch(() => {}); }, pollInterval);
+setInterval(() => { if (!busy && !drawing && document.visibilityState === 'visible') refresh().catch(() => {}); }, pollInterval);
 setInterval(() => { if (!busy && state.booking?.mine && document.visibilityState === 'visible') api('book', {}).then(s => { state = s; update(); }).catch(() => refresh().catch(() => {})); }, 60000);

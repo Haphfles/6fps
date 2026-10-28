@@ -67,7 +67,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
       return res.end("export default { backend: 'local' };");
     }
-    const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/backend.js': ['backend.js', 'text/javascript'], '/config.js': ['config.js', 'text/javascript'], '/vendor/supabase.js': ['vendor/supabase.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+    const files = { '/': ['index.html', 'text/html'], '/admin.html': ['admin.html', 'text/html'], '/admin.css': ['admin.css', 'text/css'], '/admin.js': ['admin.js', 'text/javascript'], '/admin-api.js': ['admin-api.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/backend.js': ['backend.js', 'text/javascript'], '/config.js': ['config.js', 'text/javascript'], '/vendor/supabase.js': ['vendor/supabase.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
     if (req.method === 'GET' && files[url.pathname]) { const [file, type] = files[url.pathname]; res.writeHead(200, { 'Content-Type': type }); return res.end(readFileSync(path.join(root, 'public', file))); }
     send(404, { error: 'Not found.' });
   } catch (e) { if (!e.status) console.error(e); send(e.status || 500, { error: e.status ? e.message : 'Something went wrong. Please try again.' }); }
