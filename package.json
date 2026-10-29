@@ -17,7 +17,7 @@
     "mediabunny": "1.63.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.23",
+    "@electric-sql/pglite": "^0.5.13",
     "esbuild": "^0.28.2"
   }
 }
