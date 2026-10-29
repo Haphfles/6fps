@@ -1,11 +1,11 @@
 {
   "name": "6fps",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --check app.js && node --check backend.js && node --check admin.js && node --check admin-api.js && node --check config.js && node --check server.js && node --check scripts/build.js",
+    "test": "node --check app.js && node --check backend.js && node --check admin.js && node --check admin-api.js && node --check config.js && node --check server.js && node --check scripts/build.js && node --check video-export.js",
     "build": "node scripts/build.js",
     "prestart": "npm run build"
   },
@@ -13,7 +13,8 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0"
+    "@supabase/supabase-js": "^2.118.0",
+    "mediabunny": "1.63.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.13",

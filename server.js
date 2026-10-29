@@ -54,7 +54,7 @@ const server = http.createServer(async (req, res) => {
           if (url.pathname === '/api/frames') {
             if (typeof input?.image !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(input.image)) return { status: 400, value: { error: 'Please submit a PNG frame.' } };
             const bytes = Buffer.from(input.image.split(',')[1], 'base64');
-            if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(16) !== 540 || bytes.readUInt32BE(20) !== 960) return { status: 400, value: { error: 'Frame must be a 540 × 960 PNG.' } };
+            if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(16) !== 1080 || bytes.readUInt32BE(20) !== 1920) return { status: 400, value: { error: 'Frame must be a 1080 × 1920 PNG.' } };
             db.prepare('INSERT INTO frames VALUES (?, ?, ?)').run(current.count + 1, input.image, Date.now());
           }
           db.prepare('DELETE FROM booking WHERE id = 1').run();
@@ -67,7 +67,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-store' });
       return res.end("export default { backend: 'local' };");
     }
-    const files = { '/': ['index.html', 'text/html'], '/admin.html': ['admin.html', 'text/html'], '/admin.css': ['admin.css', 'text/css'], '/admin.js': ['admin.js', 'text/javascript'], '/admin-api.js': ['admin-api.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/backend.js': ['backend.js', 'text/javascript'], '/config.js': ['config.js', 'text/javascript'], '/vendor/supabase.js': ['vendor/supabase.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
+    const files = { '/': ['index.html', 'text/html'], '/admin.html': ['admin.html', 'text/html'], '/admin.css': ['admin.css', 'text/css'], '/admin.js': ['admin.js', 'text/javascript'], '/admin-api.js': ['admin-api.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/backend.js': ['backend.js', 'text/javascript'], '/video-export.js': ['video-export.js', 'text/javascript'], '/vendor/mediabunny.js': ['vendor/mediabunny.js', 'text/javascript'], '/config.js': ['config.js', 'text/javascript'], '/vendor/supabase.js': ['vendor/supabase.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'] };
     if (req.method === 'GET' && files[url.pathname]) { const [file, type] = files[url.pathname]; res.writeHead(200, { 'Content-Type': type }); return res.end(readFileSync(path.join(root, 'public', file))); }
     send(404, { error: 'Not found.' });
   } catch (e) { if (!e.status) console.error(e); send(e.status || 500, { error: e.status ? e.message : 'Something went wrong. Please try again.' }); }

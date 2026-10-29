@@ -67,3 +67,5 @@ export async function api(route,body) {
  throw new Error('Unknown request.');
 }
 export const pollInterval=10000;
+
+export async function publicImage(path){return (await client()).storage.from('sixfps-frames').getPublicUrl(path).data.publicUrl;}
