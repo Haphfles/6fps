@@ -13,7 +13,7 @@ export async function client() {
 }
 function checked(result) {
   if (result.error) {
-    if (result.error.code === 'PGRST202') throw new Error('Admin setup needed. Run supabase/projects.sql in Supabase.');
+    if (result.error.code === 'PGRST202') throw new Error('Admin setup needed. Run the database setup SQL supplied with this update in Supabase.');
     throw new Error(result.error.message);
   }
   return result.data;
@@ -44,3 +44,19 @@ export async function deleteFrame(frame, revision) {
   checked(await sb.storage.from('sixfps-frames').remove([frame.path]));
   return edit('finish_delete', frame.id, null, prepared.movie.revision);
 }
+
+export async function deleteProject(revision) {
+ return checked(await (await client()).rpc('sixfps_project_delete', {p_project:projectId, expected_revision:revision}));
+}
+export async function cleanupProjects() {
+ const c=await client();
+ while(true){
+  const rows=checked(await c.from('sixfps_project_cleanup').select('path').limit(100));
+  if(!rows.length)return;
+  const paths=rows.map(r=>r.path);
+  checked(await c.storage.from('sixfps-frames').remove(paths));
+  checked(await c.rpc('sixfps_project_cleanup_done',{p_paths:paths}));
+ }
+}
+
+export async function pendingCleanup() {return checked(await (await client()).from('sixfps_project_cleanup').select('path').limit(1)).length>0;}

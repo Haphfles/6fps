@@ -1,5 +1,5 @@
-import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.5.3';
-import { exportMovie, validateMovieFrames } from './video-export.js?v=0.5.3';
+import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.6.0';
+import { exportMovie, validateMovieFrames } from './video-export.js?v=0.6.0';
 const $=id=>document.getElementById(id),canvas=$('drawing'),ctx=canvas.getContext('2d'),onion=$('onion').getContext('2d');
 const emptyState=()=>({count:0,frames:[],reservations:[],booking:null,revision:0});
 let state=emptyState(),selected=0,tool='round',drawing=false,editing=false,busy=false,playback=null,history=[],future=[],images=new Map(),renderToken=0,draft=null;

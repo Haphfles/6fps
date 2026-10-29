@@ -1,4 +1,4 @@
-import { session, login, logout, loadMovie, imageUrl, edit, deleteFrame, listProjects, selectProject, createProject } from './admin-api.js';
+import { session, login, logout, loadMovie, imageUrl, edit, deleteFrame, listProjects, selectProject, createProject, deleteProject, cleanupProjects, pendingCleanup } from './admin-api.js?v=0.6.0';
 const $ = id => document.getElementById(id);
 const playSVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14l11-7z"/></svg>';
 const pauseSVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z"/></svg>';
@@ -42,10 +42,10 @@ function render() {
   }
   renderSelection();
 }
-function setBusy(value) { busy = value; document.querySelectorAll('button').forEach(b => b.disabled = value); $('admin-project').disabled=value; $('project-name').disabled=value; if (data) renderSelection(); }
-async function refresh() { data = await loadMovie(); render(); }
+function setBusy(value) { busy = value; document.querySelectorAll('button').forEach(b => b.disabled = value); $('admin-project').disabled=value; $('project-name').disabled=value; $('clear-movie').disabled=value||!data; $('delete-project').disabled=value||!data; if (data) renderSelection(); }
+async function refresh() { if (!$('admin-project').value) {data=null;selected=null;$('movie-editor').hidden=true;return;} data = await loadMovie(); $('movie-editor').hidden=!data?.movie;if(data?.movie)render();else data=null; }
 async function openEditor() {
-  await fillProjects(); await refresh(); $('login-panel').hidden = true; $('editor').hidden = false; $('logout').hidden = false; $('refresh').hidden = false; message('');
+  await fillProjects(); await refresh(); $('cleanup-projects').hidden=!(await pendingCleanup().catch(()=>false)); $('login-panel').hidden = true; $('editor').hidden = false; $('logout').hidden = false; $('refresh').hidden = false; message('');
 }
 $('login-form').onsubmit = async e => {
   e.preventDefault(); setBusy(true); message('Signing in…');
@@ -89,7 +89,7 @@ $('admin-play').onclick = async () => {
   } catch(e) { message(e.message); } finally { setBusy(false); }
 };
 async function fillProjects(preferred) {
-  const list=await listProjects(), current=preferred || Number($('admin-project').value) || list[0]?.id;
+  const list=await listProjects(), wanted=preferred || Number($('admin-project').value), current=list.find(p=>p.id===wanted)?.id || list[0]?.id || ''; 
   $('admin-project').replaceChildren(...list.map(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name;return o;}));
   $('admin-project').value=current;selectProject(current);
 }
@@ -97,3 +97,18 @@ $('admin-project').onchange=async()=>{stop();setBusy(true);selected=null;archive
 $('create-project-form').onsubmit=async e=>{e.preventDefault();stop();setBusy(true);try{const id=await createProject($('project-name').value.trim());$('project-name').value='';await fillProjects(id);selected=null;archived=false;await refresh();message('Movie created · 90 frames / 15 seconds.');}catch(e){message(e.message);}finally{setBusy(false);}};
 $('clear-movie').onclick=()=>{if(confirm('Clear this movie? All its submitted frames move to Archive and all current bookings are released. You can restore archived drawings later.'))mutate('clear');};
 (async () => { setBusy(true); try { if (await session()) await openEditor(); } catch(e) { message(e.message); } finally { setBusy(false); } })();
+
+$('delete-project').onclick=async()=>{
+ if(busy||!data)return;
+ const name=data.movie.name||$('admin-project').selectedOptions[0]?.textContent;
+ if(!confirm(`Permanently delete “${name}”? All its published frames, archived drawings and active bookings will be removed. This cannot be undone.`))return;
+ stop();setBusy(true);message('Deleting project…');
+ try{
+  await deleteProject(data.movie.revision);data=null;selected=null;archived=false;
+  await fillProjects();await refresh();
+  try{await cleanupProjects();$('cleanup-projects').hidden=true;message('Project deleted.');}
+  catch(e){$('cleanup-projects').hidden=false;message('Project deleted. Some image files still need cleanup. Use Retry image cleanup. '+e.message);}
+ }catch(e){await fillProjects().then(refresh).catch(()=>{});message(e.message);}
+ finally{setBusy(false);}
+};
+$('cleanup-projects').onclick=async()=>{setBusy(true);try{await cleanupProjects();$('cleanup-projects').hidden=true;message('Image cleanup complete.');}catch(e){message(e.message);}finally{setBusy(false);}};
