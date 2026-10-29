@@ -1,6 +1,6 @@
 {
   "name": "6fps",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,7 @@
     "mediabunny": "1.63.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.13",
+    "@electric-sql/pglite": "^0.5.23",
     "esbuild": "^0.28.2"
   }
 }

@@ -1,8 +1,8 @@
-import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.5.0';
-import { exportMovie, validateMovieFrames } from './video-export.js?v=0.5.0';
+import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.5.2';
+import { exportMovie, validateMovieFrames } from './video-export.js?v=0.5.2';
 const $=id=>document.getElementById(id),canvas=$('drawing'),ctx=canvas.getContext('2d'),onion=$('onion').getContext('2d');
 const emptyState=()=>({count:0,frames:[],reservations:[],booking:null,revision:0});
-let state=emptyState(),selected=0,tool='pen',drawing=false,editing=false,busy=false,playback=null,history=[],future=[],images=new Map(),renderToken=0,draft=null;
+let state=emptyState(),selected=0,tool='round',drawing=false,editing=false,busy=false,playback=null,history=[],future=[],images=new Map(),renderToken=0,draft=null;
 let liveDrafts=new Map(),overlayToken=0,draftDirty=false,draftSending=false,refreshing=false,pendingRefresh=false,projectEpoch=0,ready=false;
 let previewImages=new Map(),stripGeneration=0,exportController=null,exportUrl=null;
 let artistName='', nameChosen=false;
@@ -139,12 +139,12 @@ $('publish').onclick=async()=>{
 };
 function point(e) { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * 1080 / r.width, (e.clientY - r.top) * 1920 / r.height]; }
 function saveUndo() { history.push(canvas.toDataURL()); if (history.length > 30) history.shift(); future = []; }
-let lastPoint=null,strokeSize=12,strokeColour='#000000';
-function startMark(x,y){ctx.beginPath();ctx.arc(x,y,strokeSize/2,0,Math.PI*2);ctx.fill();}
+let lastPoint=null,strokeSize=12,strokeColour='#000000',strokeShape='round';
+function startMark(x,y){if(strokeShape==='square'){ctx.fillRect(x-strokeSize/2,y-strokeSize/2,strokeSize,strokeSize);}else{ctx.beginPath();ctx.arc(x,y,strokeSize/2,0,Math.PI*2);ctx.fill();}}
 canvas.onpointerdown=e=>{
  if(!editing||busy||!state.booking?.mine||!activeTurn()||e.button!==0||drawing)return;
  e.preventDefault();saveUndo();drawing=true;draftDirty=true;canvas.setPointerCapture(e.pointerId);
- strokeSize=Number($('size').value);strokeColour=$('colour').value;
+ strokeSize=Number($('size').value);strokeColour=$('colour').value;strokeShape=tool;
  ctx.globalCompositeOperation=tool==='eraser'?'destination-out':'source-over';
  ctx.fillStyle=strokeColour;ctx.strokeStyle=strokeColour;ctx.lineWidth=strokeSize;ctx.lineCap='round';ctx.lineJoin='round';
  lastPoint=point(e);startMark(...lastPoint);update();
@@ -153,7 +153,12 @@ canvas.onpointermove=e=>{
  if(!drawing)return;if(!activeTurn()){endStroke();return;}draftDirty=true;
  const events=e.getCoalescedEvents?.();
  for(const p of events?.length?events:[e]){
-  const next=point(p);ctx.beginPath();ctx.moveTo(...lastPoint);ctx.lineTo(...next);ctx.stroke();lastPoint=next;
+  const next=point(p);
+  if(strokeShape==='square'){
+   const dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/Math.max(1,strokeSize*.1)));
+   for(let i=1;i<=steps;i++)startMark(lastPoint[0]+dx*i/steps,lastPoint[1]+dy*i/steps);
+  }else{ctx.beginPath();ctx.moveTo(...lastPoint);ctx.lineTo(...next);ctx.stroke();}
+  lastPoint=next;
  }
 };
 function endStroke(){if(!drawing)return;drawing=false;ctx.globalCompositeOperation='source-over';draft=canvas.toDataURL();draftDirty=true;update();}
@@ -162,7 +167,14 @@ document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{
  if(drawing)return;tool=button.dataset.tool;
  document.querySelectorAll('[data-tool]').forEach(b=>{b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',String(b===button));});
 });
-$('size').oninput=()=>$('size-value').textContent=$('size').value;
+function updateBrushPreview(){
+ const size=Number($('size').value),diameter=Math.max(3,size*canvas.getBoundingClientRect().width/canvas.width);
+ $('size').style.setProperty('--brush-diameter',`${diameter}px`);
+ $('size').setAttribute('aria-valuetext',`${size} pixels`);
+}
+$('size').oninput=updateBrushPreview;
+new ResizeObserver(updateBrushPreview).observe(canvas);
+updateBrushPreview();
 async function restore(from, to) { if (!editing || busy || !from.length) return; busy = true; to.push(canvas.toDataURL()); const img = await loadImage(from.pop()); blank(); ctx.globalCompositeOperation = 'source-over'; ctx.drawImage(img, 0, 0); draft = canvas.toDataURL(); draftDirty = true; busy = false; update(); }
 $('undo').onclick = () => restore(history, future); $('redo').onclick = () => restore(future, history);
 function opacity(){$('onion').style.opacity=Number($('opacity').value)/100;$('opacity-value').textContent=`${$('opacity').value}%`;}

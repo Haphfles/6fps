@@ -19,3 +19,23 @@ button{-webkit-appearance:none;appearance:none;background-image:none;box-shadow:
 /* Simple round brush: size and colour only. */
 .brush-size,.brush-colour{display:flex;align-items:center;gap:8px;font-size:11px}.brush-size{margin-left:12px}.brush-size input{width:80px}.brush-size output{width:18px;font:10px monospace}.brush-colour input{appearance:none;-webkit-appearance:none;width:30px;height:30px;padding:2px;border:1px solid #000;border-radius:0;background:#fff;cursor:pointer}.brush-colour input::-webkit-color-swatch-wrapper{padding:0}.brush-colour input::-webkit-color-swatch{border:0;border-radius:0}.brush-colour input::-moz-color-swatch{border:0;border-radius:0}.export-controls{justify-self:end;display:flex;flex-direction:column;align-items:flex-end;gap:4px}#export-video{font-size:11px;padding:5px 0;text-decoration:underline;text-underline-offset:3px}#export-dialog{width:min(330px,calc(100vw - 32px));padding:24px;border:1px solid #000;color:#000;background:#fff}#export-dialog::backdrop{background:#0005}#export-title{font-size:16px;font-weight:400;margin:0}#export-status{font:11px monospace;line-height:1.6;margin:18px 0}#export-progress{width:100%;height:6px;accent-color:#000}.export-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:22px}.export-actions a{color:#000;font-size:12px}.export-actions button{font-size:12px;padding:10px}
 @media(max-width:600px){.toolbar{gap:4px}.tool{padding:8px;font-size:11px;gap:4px}.tool svg{width:14px;height:14px}.brush-size{margin-left:4px;gap:5px}.brush-size input{width:52px}.brush-colour{gap:5px}.brush-colour input{width:26px;height:26px}.brush-colour{font-size:10px}}
+
+/* Compact brush controls. */
+.top-tools{height:calc(52px + env(safe-area-inset-top));min-height:calc(52px + env(safe-area-inset-top));width:100%;justify-content:center;gap:10px;border-bottom:1px solid #000;padding-top:env(safe-area-inset-top)}.top-tools .tool{width:38px;height:38px;min-height:38px;padding:8px}.brush-icon{display:block;width:14px;height:14px;background:#000}.round-icon{border-radius:50%}.square-icon{border-radius:0}.top-tools #size{--brush-diameter:3px;width:110px;height:38px;margin:0 12px}.top-tools #size::-webkit-slider-thumb{width:var(--brush-diameter);height:var(--brush-diameter);border-radius:50%;margin-top:calc((1px - var(--brush-diameter))/2)}.top-tools #size::-moz-range-thumb{width:var(--brush-diameter);height:var(--brush-diameter);border-radius:50%}.top-tools .brush-colour{font-size:11px;gap:8px}@media(max-width:600px){.top-tools{height:calc(48px + env(safe-area-inset-top));min-height:calc(48px + env(safe-area-inset-top));gap:4px}.top-tools .tool{width:34px;height:34px;min-height:34px;padding:8px}.top-tools #size{width:86px;margin:0 8px}.top-tools .brush-colour{gap:5px;font-size:10px}}
+
+/* Logo and tools share the top row; project actions move below on phones. */
+header{display:grid;grid-template-columns:auto minmax(70px,1fr) auto minmax(150px,1fr);height:calc(66px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+header .top-tools{width:auto;height:44px;min-height:44px;padding:0;border:0;gap:6px}
+header .booking-actions{justify-self:end}
+header #project-select{max-width:180px;margin-left:12px;margin-right:0;width:100%}
+@media(max-width:900px){
+ header{grid-template-columns:auto 1fr;height:calc(96px + env(safe-area-inset-top));row-gap:0;column-gap:8px}
+ header .wordmark{grid-column:1;grid-row:1}
+ header .top-tools{grid-column:2;grid-row:1;justify-self:end;gap:2px}
+ header #project-select{grid-column:1;grid-row:2;max-width:130px;width:100%;margin:0}
+ header .booking-actions{grid-column:2;grid-row:2}
+ header .top-tools .tool{width:30px;height:34px;min-height:34px;padding:6px}
+ header .top-tools #size{width:62px;margin:0 6px}
+ header .top-tools .brush-colour{gap:4px;font-size:10px}
+}
+@media(max-width:380px){header .top-tools #size{width:44px;margin:0 4px}header .top-tools .tool{width:26px}header .top-tools .brush-colour{gap:3px}}
