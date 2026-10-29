@@ -23,4 +23,4 @@ await build({
   outfile: join(output, 'vendor/mediabunny.js'), bundle: true, minify: true,
   format: 'esm', platform: 'browser', target: 'es2022', legalComments: 'linked',
 });
-console.log('6FPS 0.5.2: published repository-root files to public/');
+console.log('6FPS 0.5.3: published repository-root files to public/');

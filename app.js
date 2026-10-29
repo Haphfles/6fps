@@ -1,5 +1,5 @@
-import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.5.2';
-import { exportMovie, validateMovieFrames } from './video-export.js?v=0.5.2';
+import { api, chooseProject, listen, sendDraft, readDrafts, isLive, pollInterval, publicImage } from './backend.js?v=0.5.3';
+import { exportMovie, validateMovieFrames } from './video-export.js?v=0.5.3';
 const $=id=>document.getElementById(id),canvas=$('drawing'),ctx=canvas.getContext('2d'),onion=$('onion').getContext('2d');
 const emptyState=()=>({count:0,frames:[],reservations:[],booking:null,revision:0});
 let state=emptyState(),selected=0,tool='round',drawing=false,editing=false,busy=false,playback=null,history=[],future=[],images=new Map(),renderToken=0,draft=null;
@@ -78,7 +78,7 @@ function update(){
  $('progress').textContent=`${state.count}/90 · ${(state.count/6).toFixed(1)}/15s`;
  $('scrubber').max=90;$('scrubber').value=selected||ownSlot()||1;$('scrubber').disabled=busy||(!state.frames.length&&!state.reservations.length);
  $('position').textContent=`${String(editing?ownSlot():selected).padStart(3,'0')} / 090`;
- $('play').disabled=busy||!state.count;$('undo').disabled=!editing||!history.length;$('redo').disabled=!editing||!future.length;
+ $('play').disabled=busy||(!state.count&&!(activeTurn()&&(draft||history.length))); $('undo').disabled=!editing||!history.length;$('redo').disabled=!editing||!future.length;
  canvas.style.cursor=editing?'crosshair':'default';
  document.querySelectorAll('.frame[data-index]').forEach(el=>el.classList.toggle('selected',Number(el.dataset.index)===(editing?ownSlot():selected)));
 }
@@ -91,7 +91,7 @@ async function overlay(){
 }
 async function show(n){
  const token=++renderToken;if(editing)draft=canvas.toDataURL();editing=false;selected=n;++overlayToken;onion.clearRect(0,0,1080,1920);blank();update();
- const image=submitted(n)?await (playback?previewAt(n):imageAt(n)):liveDrafts.has(n)?await loadImage(liveDrafts.get(n)):null;
+ const image=n===ownSlot()&&activeTurn()&&draft?await loadImage(draft):submitted(n)?await (playback?previewAt(n):imageAt(n)):liveDrafts.has(n)?await loadImage(liveDrafts.get(n)):null;
  if(token===renderToken&&image)fit(ctx,image);
 }
 async function resume(){if(!activeTurn())return;stop();const token=++renderToken;editing=true;selected=ownSlot();blank();if(draft){const img=await loadImage(draft);if(token===renderToken)ctx.drawImage(img,0,0,1080,1920);}await overlay();update();}
@@ -181,8 +181,12 @@ function opacity(){$('onion').style.opacity=Number($('opacity').value)/100;$('op
 $('opacity').oninput=opacity;
 $('scrubber').oninput=()=>{stop();show(Number($('scrubber').value)).catch(e=>toast(e.message));};
 $('play').onclick=async()=>{
- if(playback)return stop();busy=true;update();
- try{for(const frame of state.frames)await previewAt(frame.slot);await show(1);busy=false;update();$('play').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z"/></svg>';$('play').setAttribute('aria-label','Pause movie');const end=highest();playback=setInterval(()=>show(selected%end+1).catch(e=>{stop();toast(e.message);}),1000/6);}catch(e){busy=false;update();toast(e.message);}
+ if(playback){stop();if(activeTurn()&&draft)await resume();else update();return;}
+ if(busy)return;
+ if(drawing)endStroke();
+ if(editing)draft=canvas.toDataURL();
+ busy=true;update();
+ try{for(const frame of state.frames)await previewAt(frame.slot);await show(1);busy=false;update();$('play').innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM15 5h4v14h-4z"/></svg>';$('play').setAttribute('aria-label','Pause movie');const end=Math.max(highest(),activeTurn()&&draft?ownSlot():0);playback=setInterval(()=>show(selected%end+1).catch(e=>{stop();toast(e.message);}),1000/6);}catch(e){busy=false;update();toast(e.message);}
 };
 let scrubDrag=null,suppressClick=false;const filmstrip=$('filmstrip');
 filmstrip.onpointerdown=e=>{if(!busy&&e.button===0)scrubDrag={x:e.clientX,left:filmstrip.scrollLeft,frame:selected||1,moved:false};};
